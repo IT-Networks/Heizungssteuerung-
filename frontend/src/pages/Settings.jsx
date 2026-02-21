@@ -125,6 +125,55 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Weather / Outdoor temperature settings */}
+      <div className="card">
+        <h3 className="font-semibold text-gray-900 mb-4">Außentemperatur-Prüfung</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Wenn aktiviert, wird die Heizung nur eingeschaltet wenn die Außentemperatur unter dem Schwellwert liegt.
+          Daten von Open-Meteo (kostenlos, keine API-Key erforderlich).
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Aktiviert</label>
+            <label className="relative inline-flex items-center cursor-pointer mt-2">
+              <input
+                type="checkbox"
+                checked={form.weather_enabled === 'true'}
+                onChange={e => update('weather_enabled', e.target.checked ? 'true' : 'false')}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
+              <span className="ml-3 text-sm text-gray-600">
+                {form.weather_enabled === 'true' ? 'Außentemperatur wird geprüft' : 'Deaktiviert'}
+              </span>
+            </label>
+          </div>
+          <SettingField
+            label="Temperatur-Schwelle (°C)"
+            description="Heizung wird nur aktiviert wenn Außentemperatur unter diesem Wert liegt."
+            value={form.weather_threshold || '15'}
+            onChange={v => update('weather_threshold', v)}
+            type="number"
+            min={-10}
+            max={30}
+          />
+          <SettingField
+            label="Breitengrad (Latitude)"
+            description="z.B. 51.1657 für Deutschland-Mitte. Finden Sie Ihre Koordinaten auf Google Maps."
+            value={form.weather_latitude || ''}
+            onChange={v => update('weather_latitude', v)}
+            type="text"
+          />
+          <SettingField
+            label="Längengrad (Longitude)"
+            description="z.B. 10.4515 für Deutschland-Mitte."
+            value={form.weather_longitude || ''}
+            onChange={v => update('weather_longitude', v)}
+            type="text"
+          />
+        </div>
+      </div>
+
       {/* Save button */}
       <div className="flex items-center gap-3">
         <button

@@ -26,10 +26,10 @@ export default function Mappings() {
     }
   };
 
-  const handleDelete = async (resourceId) => {
+  const handleDelete = async (id) => {
     if (!confirm('Zuordnung wirklich löschen?')) return;
     try {
-      await api.deleteMapping(resourceId);
+      await api.deleteMapping(id);
       reloadMap();
     } catch (err) {
       alert('Fehler: ' + err.message);
@@ -90,7 +90,7 @@ export default function Mappings() {
       ) : (
         <div className="space-y-3">
           {(mappings || []).map(mapping => (
-            <div key={mapping.resourceId} className="card">
+            <div key={mapping.id} className="card">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-3 h-3 rounded-full ${mapping.enabled ? 'bg-green-400' : 'bg-gray-300'}`} />
@@ -107,7 +107,7 @@ export default function Mappings() {
                     Bearbeiten
                   </button>
                   <button
-                    onClick={() => handleDelete(mapping.resourceId)}
+                    onClick={() => handleDelete(mapping.id)}
                     className="btn-danger text-xs px-3 py-1"
                   >
                     Löschen

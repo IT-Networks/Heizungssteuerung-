@@ -17,9 +17,46 @@ function getDb() {
 }
 
 function initSchema() {
+  // Check if we need to migrate from old schema (resource_id as primary key)
+  const tableInfo = db.prepare("PRAGMA table_info(mappings)").all();
+  const hasOldSchema = tableInfo.length > 0 &&
+    tableInfo.some(col => col.name === 'resource_id' && col.pk === 1);
+
+  if (hasOldSchema) {
+    console.log('[Database] Migrating mappings table to support multiple devices per resource...');
+    db.exec(`
+      ALTER TABLE mappings RENAME TO mappings_old;
+
+      CREATE TABLE mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        resource_id INTEGER NOT NULL,
+        resource_name TEXT NOT NULL DEFAULT '',
+        device_id TEXT NOT NULL,
+        device_name TEXT NOT NULL DEFAULT '',
+        target_temperature REAL NOT NULL DEFAULT 21.0,
+        idle_temperature REAL NOT NULL DEFAULT 16.0,
+        preheat_minutes INTEGER NOT NULL DEFAULT 30,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(resource_id, device_id)
+      );
+
+      INSERT INTO mappings (resource_id, resource_name, device_id, device_name,
+        target_temperature, idle_temperature, preheat_minutes, enabled, created_at, updated_at)
+      SELECT resource_id, resource_name, device_id, device_name,
+        target_temperature, idle_temperature, preheat_minutes, enabled, created_at, updated_at
+      FROM mappings_old;
+
+      DROP TABLE mappings_old;
+    `);
+    console.log('[Database] Migration complete');
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS mappings (
-      resource_id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resource_id INTEGER NOT NULL,
       resource_name TEXT NOT NULL DEFAULT '',
       device_id TEXT NOT NULL,
       device_name TEXT NOT NULL DEFAULT '',
@@ -28,7 +65,8 @@ function initSchema() {
       preheat_minutes INTEGER NOT NULL DEFAULT 30,
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(resource_id, device_id)
     );
 
     CREATE TABLE IF NOT EXISTS battery_status (
@@ -96,6 +134,11 @@ function initSchema() {
     frost_protection_temperature: '5',
     preheat_default_minutes: String(config.scheduler.defaultPreheatMinutes),
     scheduler_interval_minutes: String(config.scheduler.intervalMinutes),
+    // Weather settings
+    weather_enabled: 'false',
+    weather_latitude: '',
+    weather_longitude: '',
+    weather_threshold: '15',
   };
   for (const [key, value] of Object.entries(defaults)) {
     insertSetting.run(key, value);
@@ -108,16 +151,21 @@ function initSchema() {
 
 const mappingsDb = {
   getAll() {
-    return getDb().prepare('SELECT * FROM mappings ORDER BY resource_name').all().map(toMapping);
+    return getDb().prepare('SELECT * FROM mappings ORDER BY resource_name, device_name').all().map(toMapping);
   },
 
   getByResourceId(resourceId) {
-    const row = getDb().prepare('SELECT * FROM mappings WHERE resource_id = ?').get(resourceId);
-    return row ? toMapping(row) : null;
+    // Returns all mappings for a resource (multiple devices possible)
+    return getDb().prepare('SELECT * FROM mappings WHERE resource_id = ?').all(resourceId).map(toMapping);
   },
 
   getByDeviceId(deviceId) {
     const row = getDb().prepare('SELECT * FROM mappings WHERE device_id = ?').get(deviceId);
+    return row ? toMapping(row) : null;
+  },
+
+  getById(id) {
+    const row = getDb().prepare('SELECT * FROM mappings WHERE id = ?').get(id);
     return row ? toMapping(row) : null;
   },
 
@@ -126,9 +174,8 @@ const mappingsDb = {
       INSERT INTO mappings (resource_id, resource_name, device_id, device_name,
         target_temperature, idle_temperature, preheat_minutes, enabled, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(resource_id) DO UPDATE SET
+      ON CONFLICT(resource_id, device_id) DO UPDATE SET
         resource_name = excluded.resource_name,
-        device_id = excluded.device_id,
         device_name = excluded.device_name,
         target_temperature = excluded.target_temperature,
         idle_temperature = excluded.idle_temperature,
@@ -145,16 +192,21 @@ const mappingsDb = {
       mapping.preheatMinutes ?? 30,
       mapping.enabled !== false ? 1 : 0
     );
-    return this.getByResourceId(mapping.resourceId);
+    return this.getByDeviceId(mapping.deviceId);
   },
 
-  remove(resourceId) {
+  remove(id) {
+    getDb().prepare('DELETE FROM mappings WHERE id = ?').run(id);
+  },
+
+  removeByResourceId(resourceId) {
     getDb().prepare('DELETE FROM mappings WHERE resource_id = ?').run(resourceId);
   },
 };
 
 function toMapping(row) {
   return {
+    id: row.id,
     resourceId: row.resource_id,
     resourceName: row.resource_name,
     deviceId: row.device_id,

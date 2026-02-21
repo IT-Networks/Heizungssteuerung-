@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { api } from '../services/api';
 import { useApi } from '../hooks/useApi';
 
@@ -14,18 +14,29 @@ export default function Bookings() {
   const [from, setFrom] = useState(formatDate(today));
   const [to, setTo] = useState(formatDate(nextWeek));
 
+  // First fetch resources to get their IDs
+  const { data: resources } = useApi(() => api.getResources(), []);
+
+  // Then fetch bookings for all resources
+  const resourceIds = useMemo(() => (resources || []).map(r => r.id), [resources]);
+
   const { data: bookings, loading, error, reload } = useApi(
-    () => api.getBookings({ from, to }),
-    [from, to]
+    () => resourceIds.length > 0
+      ? api.getBookings({ from, to, resource_ids: resourceIds })
+      : Promise.resolve([]),
+    [from, to, resourceIds.join(',')]
   );
 
   const grouped = useMemo(() => {
     if (!bookings) return {};
     const groups = {};
-    for (const booking of bookings) {
-      const date = (booking.startDate || booking.calculated_startdate || '').split('T')[0] || 'Unbekannt';
+    for (const item of bookings) {
+      // Handle nested structure: item.booking.calculated.startDate or item.calculated.startDate
+      const booking = item.booking || item;
+      const startDate = booking.calculated?.startDate || booking.base?.startDate || booking.startDate || '';
+      const date = startDate.split('T')[0] || 'Unbekannt';
       if (!groups[date]) groups[date] = [];
-      groups[date].push(booking);
+      groups[date].push(item);
     }
     return groups;
   }, [bookings]);
@@ -91,15 +102,20 @@ export default function Bookings() {
             })}
           </h3>
           <div className="space-y-2">
-            {grouped[date].map((booking, i) => {
-              const start = new Date(booking.startDate || booking.calculated_startdate);
-              const end = new Date(booking.endDate || booking.calculated_enddate);
-              const resourceName = booking.base?.resource?.name || booking.resource_name || 'Unbekannt';
-              const caption = booking.caption || booking.base?.caption || 'Buchung';
-              const status = booking.statusId || booking.status_id;
+            {grouped[date].map((item, i) => {
+              // Handle nested structure
+              const booking = item.booking || item;
+              const base = booking.base || booking;
+              const calculated = booking.calculated || {};
+
+              const start = new Date(calculated.startDate || base.startDate);
+              const end = new Date(calculated.endDate || base.endDate);
+              const resourceName = base.resource?.name || base.resourceName || 'Unbekannt';
+              const caption = base.title || base.caption || 'Buchung';
+              const status = base.statusId;
 
               return (
-                <div key={booking.id || i} className="card flex items-center gap-4">
+                <div key={base.id || i} className="card flex items-center gap-4">
                   <div className="flex-shrink-0 w-20 text-center">
                     <p className="text-sm font-semibold text-brand-600">
                       {start.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}

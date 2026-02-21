@@ -37,8 +37,8 @@ router.put('/', (req, res) => {
   res.json(mapping);
 });
 
-router.delete('/:resourceId', (req, res) => {
-  database.mappings.remove(Number(req.params.resourceId));
+router.delete('/:id', (req, res) => {
+  database.mappings.remove(Number(req.params.id));
   res.json({ success: true });
 });
 

@@ -3,6 +3,16 @@ const config = require('../config');
 const churchtools = require('./churchtools');
 const danfoss = require('./danfoss');
 const database = require('./database');
+const weather = require('./weather');
+
+// Patterns to detect "heating off" in resource description (case insensitive)
+const HEATING_OFF_PATTERNS = [
+  /heizung\s*aus/i,
+  /keine\s*heizung/i,
+  /nicht\s*heizen/i,
+  /heating\s*off/i,
+  /no\s*heating/i,
+];
 
 class HeatingScheduler {
   constructor() {
@@ -58,26 +68,35 @@ class HeatingScheduler {
     const now = new Date();
     const results = [];
 
+    // Check outdoor temperature first (global setting)
+    const weatherCheck = await weather.shouldSkipHeating();
+    if (weatherCheck.skip) {
+      console.log(`[Scheduler] Skipping heating: ${weatherCheck.reason}`);
+    }
+
     const from = formatDate(now);
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const to = formatDate(tomorrow);
 
-    const resourceIds = mappings.map(m => m.resourceId);
+    const resourceIds = [...new Set(mappings.map(m => m.resourceId))];
 
     let bookings = [];
+    let resources = [];
     try {
-      bookings = await churchtools.getBookings({
-        resource_ids: resourceIds,
-        from,
-        to,
-      });
+      [bookings, resources] = await Promise.all([
+        churchtools.getBookings({ resource_ids: resourceIds, from, to }),
+        churchtools.getResources(),
+      ]);
     } catch (error) {
-      console.error('[Scheduler] Failed to fetch bookings:', error.message);
+      console.error('[Scheduler] Failed to fetch data:', error.message);
       this.lastRun = now.toISOString();
       this.lastResults = [{ error: error.message }];
       return;
     }
+
+    // Create resource map for quick lookup
+    const resourceMap = new Map(resources.map(r => [r.id, r]));
 
     for (const mapping of mappings) {
       const result = {
@@ -90,6 +109,53 @@ class HeatingScheduler {
       };
 
       try {
+        // Check resource description for "heating off" patterns
+        const resource = resourceMap.get(mapping.resourceId);
+        if (resource && this.isHeatingDisabledByDescription(resource.description)) {
+          result.action = 'idle';
+          result.temperature = mapping.idleTemperature || config.scheduler.defaultIdleTemperature / 10;
+          result.reason = 'Heizung deaktiviert in Ressourcen-Beschreibung';
+
+          await danfoss.setTemperature(mapping.deviceId, result.temperature);
+          result.success = true;
+          database.sessions.endSession(mapping.resourceId);
+
+          database.heatingLog.add({
+            resourceId: mapping.resourceId,
+            deviceId: mapping.deviceId,
+            action: result.action,
+            temperature: result.temperature,
+            reason: result.reason,
+            success: true,
+          });
+
+          results.push(result);
+          continue;
+        }
+
+        // Check weather conditions (outdoor temperature)
+        if (weatherCheck.skip) {
+          result.action = 'idle';
+          result.temperature = mapping.idleTemperature || config.scheduler.defaultIdleTemperature / 10;
+          result.reason = weatherCheck.reason;
+
+          await danfoss.setTemperature(mapping.deviceId, result.temperature);
+          result.success = true;
+          database.sessions.endSession(mapping.resourceId);
+
+          database.heatingLog.add({
+            resourceId: mapping.resourceId,
+            deviceId: mapping.deviceId,
+            action: result.action,
+            temperature: result.temperature,
+            reason: result.reason,
+            success: true,
+          });
+
+          results.push(result);
+          continue;
+        }
+
         const resourceBookings = bookings.filter(b => {
           const bResourceId = b.base?.resource?.id || b.resource_id;
           return bResourceId === mapping.resourceId;
@@ -147,7 +213,18 @@ class HeatingScheduler {
 
     this.lastRun = now.toISOString();
     this.lastResults = results;
-    console.log(`[Scheduler] Completed. ${results.filter(r => r.success).length}/${results.length} successful`);
+    const weatherInfo = weatherCheck.outdoorTemp !== null ? ` (Außen: ${weatherCheck.outdoorTemp}°C)` : '';
+    console.log(`[Scheduler] Completed. ${results.filter(r => r.success).length}/${results.length} successful${weatherInfo}`);
+  }
+
+  /**
+   * Check if heating is disabled in resource description
+   * @param {string | null} description - Resource description from ChurchTools
+   * @returns {boolean}
+   */
+  isHeatingDisabledByDescription(description) {
+    if (!description) return false;
+    return HEATING_OFF_PATTERNS.some(pattern => pattern.test(description));
   }
 
   evaluateBookings(bookings, now, preheatMinutes) {
