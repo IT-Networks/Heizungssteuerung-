@@ -83,14 +83,26 @@ class DanfossService {
   }
 
   /**
-   * Set thermostat temperature.
+   * Set thermostat temperature and ensure device is in manual mode.
    * @param {string} deviceId
    * @param {number} temperature - Temperature in °C (e.g. 21.5)
    */
   async setTemperature(deviceId, temperature) {
     // Danfoss API expects temperature in tenths of a degree
     const value = Math.round(temperature * 10);
+
+    // Build mode command to set device to 'at_home' (manual mode)
+    const now = new Date();
+    const timestamp = now.getFullYear().toString() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0') +
+      String(now.getHours()).padStart(2, '0') +
+      String(now.getMinutes()).padStart(2, '0');
+    const modeValue = timestamp + '010000'; // at_home mode
+
+    // Send both commands: set mode to manual and set temperature
     return this.sendCommands(deviceId, [
+      { code: 'mode', value: modeValue },
       { code: 'manual_mode_fast', value },
     ]);
   }
