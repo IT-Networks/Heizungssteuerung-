@@ -77,4 +77,8 @@ export const api = {
 
   // Health
   getHealth: () => request('/health'),
+
+  // Weather
+  getWeather: () => request('/weather'),
+  searchLocation: (query) => request(`/weather/search?q=${encodeURIComponent(query)}`),
 };

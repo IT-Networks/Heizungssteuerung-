@@ -9,6 +9,16 @@ export default function Dashboard() {
   const { data: scheduler, loading: loadingSched, reload: reloadSched } = useApi(() => api.getSchedulerStatus());
   const { data: alerts } = useApi(() => api.getActiveAlerts());
   const { data: sessions } = useApi(() => api.getActiveSessions());
+  const { data: weather } = useApi(() => api.getWeather());
+
+  // Create a map of resourceId -> resourceName from mappings
+  const resourceNames = React.useMemo(() => {
+    const map = {};
+    (mappings || []).forEach(m => {
+      map[m.resourceId] = m.resourceName;
+    });
+    return map;
+  }, [mappings]);
 
   const handleManualRun = async () => {
     try {
@@ -74,6 +84,31 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Outdoor Temperature */}
+      {weather?.enabled && weather?.current && (
+        <div className="card bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-sky-600" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm text-sky-700">Außentemperatur</p>
+                <p className="text-2xl font-bold text-sky-900">{weather.current.temperature}°C</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-sky-600">Schwelle: {weather.threshold}°C</p>
+              <p className={`text-sm font-medium ${weather.current.temperature >= weather.threshold ? 'text-green-600' : 'text-sky-700'}`}>
+                {weather.current.temperature >= weather.threshold ? 'Heizung pausiert' : 'Heizung aktiv'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Active Sessions */}
       {activeSessions.length > 0 && (
         <div className="card">
@@ -89,7 +124,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${isOverlong ? 'bg-yellow-400 animate-pulse' : 'bg-orange-400'}`} />
                     <span className="text-sm font-medium text-gray-900">
-                      Ressource {s.resource_id}
+                      {resourceNames[s.resource_id] || `Ressource ${s.resource_id}`}
                       {s.booking_caption && <span className="text-gray-500 font-normal"> - {s.booking_caption}</span>}
                     </span>
                   </div>

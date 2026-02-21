@@ -157,20 +157,16 @@ export default function Settings() {
             min={-10}
             max={30}
           />
-          <SettingField
-            label="Breitengrad (Latitude)"
-            description="z.B. 51.1657 für Deutschland-Mitte. Finden Sie Ihre Koordinaten auf Google Maps."
-            value={form.weather_latitude || ''}
-            onChange={v => update('weather_latitude', v)}
-            type="text"
-          />
-          <SettingField
-            label="Längengrad (Longitude)"
-            description="z.B. 10.4515 für Deutschland-Mitte."
-            value={form.weather_longitude || ''}
-            onChange={v => update('weather_longitude', v)}
-            type="text"
-          />
+          <div className="md:col-span-2">
+            <LocationSearch
+              latitude={form.weather_latitude}
+              longitude={form.weather_longitude}
+              onSelect={(lat, lon) => {
+                update('weather_latitude', lat);
+                update('weather_longitude', lon);
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -208,6 +204,102 @@ function SettingField({ label, description, value, onChange, type = 'text', min,
         max={max}
         className="input"
       />
+    </div>
+  );
+}
+
+function LocationSearch({ latitude, longitude, onSelect }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+
+  const handleSearch = async (q) => {
+    setQuery(q);
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const data = await api.searchLocation(q);
+      setResults(data);
+      setShowResults(true);
+    } catch (err) {
+      console.error('Location search failed:', err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelect = (loc) => {
+    onSelect(String(loc.latitude), String(loc.longitude));
+    setQuery(`${loc.name}, ${loc.admin1 || loc.country}`);
+    setShowResults(false);
+    setResults([]);
+  };
+
+  const hasLocation = latitude && longitude;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Standort</label>
+        <p className="text-xs text-gray-400 mb-2">
+          Suchen Sie nach Ihrer Stadt oder Gemeinde.
+        </p>
+        <div className="relative">
+          <input
+            type="text"
+            value={query}
+            onChange={e => handleSearch(e.target.value)}
+            onFocus={() => results.length > 0 && setShowResults(true)}
+            placeholder="z.B. Wuppertal, Berlin, München..."
+            className="input pr-10"
+          />
+          {searching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="w-4 h-4 border-2 border-gray-300 border-t-brand-600 rounded-full animate-spin" />
+            </div>
+          )}
+
+          {/* Results dropdown */}
+          {showResults && results.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+              {results.map((loc, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleSelect(loc)}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center justify-between"
+                >
+                  <span className="text-sm text-gray-900">
+                    {loc.name}
+                    {loc.admin1 && <span className="text-gray-500">, {loc.admin1}</span>}
+                  </span>
+                  <span className="text-xs text-gray-400">{loc.country}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {hasLocation && (
+        <div className="flex items-center gap-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-green-800">Standort gesetzt</p>
+            <p className="text-xs text-green-600">
+              {latitude}, {longitude}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

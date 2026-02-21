@@ -14,6 +14,7 @@ const batteryRoutes = require('./routes/battery');
 const alertRoutes = require('./routes/alerts');
 const settingsRoutes = require('./routes/settings');
 const monitorRoutes = require('./routes/monitor');
+const weatherRoutes = require('./routes/weather');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/battery', batteryRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/monitor', monitorRoutes);
+app.use('/api/weather', weatherRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
