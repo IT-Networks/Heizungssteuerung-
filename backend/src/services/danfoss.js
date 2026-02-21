@@ -114,6 +114,56 @@ class DanfossService {
       { code: 'mode', value: timestamp + modeCode },
     ]);
   }
+
+  extractBatteryLevel(device) {
+    if (!device) return null;
+    const status = device.status || [];
+    for (const s of status) {
+      if (s.code === 'battery_percentage' || s.code === 'battery_level') {
+        return typeof s.value === 'number' ? s.value : parseInt(s.value, 10);
+      }
+    }
+    if (typeof device.battery_level === 'number') return device.battery_level;
+    if (typeof device.battery_percentage === 'number') return device.battery_percentage;
+    return null;
+  }
+
+  extractCurrentTemperature(device) {
+    if (!device) return null;
+    const status = device.status || [];
+    for (const s of status) {
+      if (s.code === 'temp_current') {
+        const val = typeof s.value === 'number' ? s.value : parseInt(s.value, 10);
+        return val / 10;
+      }
+    }
+    return null;
+  }
+
+  extractSetTemperature(device) {
+    if (!device) return null;
+    const status = device.status || [];
+    for (const s of status) {
+      if (s.code === 'temp_set') {
+        const val = typeof s.value === 'number' ? s.value : parseInt(s.value, 10);
+        return val / 10;
+      }
+    }
+    return null;
+  }
+
+  async getDevicesWithStatus() {
+    const devices = await this.getDevices();
+    return devices.map(device => ({
+      ...device,
+      parsed: {
+        batteryLevel: this.extractBatteryLevel(device),
+        currentTemperature: this.extractCurrentTemperature(device),
+        setTemperature: this.extractSetTemperature(device),
+        online: device.online !== false,
+      },
+    }));
+  }
 }
 
 module.exports = new DanfossService();

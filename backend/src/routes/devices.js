@@ -3,10 +3,10 @@ const danfoss = require('../services/danfoss');
 
 const router = express.Router();
 
-// GET /api/devices - list all Danfoss devices
+// GET /api/devices - list all Danfoss devices with parsed status
 router.get('/', async (req, res) => {
   try {
-    const devices = await danfoss.getDevices();
+    const devices = await danfoss.getDevicesWithStatus();
     res.json(devices);
   } catch (error) {
     console.error('[API] GET /devices error:', error.message);

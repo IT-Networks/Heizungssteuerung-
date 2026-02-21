@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config');
 const churchtools = require('./services/churchtools');
+const database = require('./services/database');
 const scheduler = require('./services/scheduler');
 
 const resourceRoutes = require('./routes/resources');
@@ -9,6 +10,10 @@ const bookingRoutes = require('./routes/bookings');
 const deviceRoutes = require('./routes/devices');
 const mappingRoutes = require('./routes/mappings');
 const schedulerRoutes = require('./routes/scheduler');
+const batteryRoutes = require('./routes/battery');
+const alertRoutes = require('./routes/alerts');
+const settingsRoutes = require('./routes/settings');
+const monitorRoutes = require('./routes/monitor');
 
 const app = express();
 
@@ -21,14 +26,20 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/mappings', mappingRoutes);
 app.use('/api/scheduler', schedulerRoutes);
+app.use('/api/battery', batteryRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/monitor', monitorRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const activeAlerts = database.alerts.getActive();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     churchtools: !!config.churchtools.url,
     danfoss: !!config.danfoss.apiKey,
+    activeAlerts: activeAlerts.length,
   });
 });
 

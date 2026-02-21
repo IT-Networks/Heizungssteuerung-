@@ -52,6 +52,29 @@ export const api = {
   getSchedulerStatus: () => request('/scheduler/status'),
   runScheduler: () => request('/scheduler/run', { method: 'POST' }),
 
+  // Battery
+  getBatteryStatus: () => request('/battery'),
+  getBatteryHistory: (deviceId, days = 30) => request(`/battery/${deviceId}/history?days=${days}`),
+
+  // Alerts
+  getAlerts: (active = false) => request(`/alerts?active=${active}`),
+  getActiveAlerts: () => request('/alerts?active=true'),
+  acknowledgeAlert: (id) => request(`/alerts/${id}/acknowledge`, { method: 'POST' }),
+  acknowledgeAllAlerts: () => request('/alerts/acknowledge-all', { method: 'POST' }),
+
+  // Settings
+  getSettings: () => request('/settings'),
+  saveSettings: (settings) =>
+    request('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+
+  // Monitor
+  getActiveSessions: () => request('/monitor/sessions'),
+  getSessionHistory: (resourceId, days = 30) => request(`/monitor/sessions/history/${resourceId}?days=${days}`),
+  getHeatingLog: (limit = 100) => request(`/monitor/log?limit=${limit}`),
+
   // Health
   getHealth: () => request('/health'),
 };

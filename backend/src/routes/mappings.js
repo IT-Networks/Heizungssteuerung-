@@ -1,14 +1,12 @@
 const express = require('express');
-const store = require('../services/store');
+const database = require('../services/database');
 
 const router = express.Router();
 
-// GET /api/mappings - list all resource-to-device mappings
 router.get('/', (req, res) => {
-  res.json(store.getAll());
+  res.json(database.mappings.getAll());
 });
 
-// PUT /api/mappings - create or update a mapping
 router.put('/', (req, res) => {
   const {
     resourceId,
@@ -25,7 +23,7 @@ router.put('/', (req, res) => {
     return res.status(400).json({ error: 'resourceId and deviceId are required' });
   }
 
-  const mapping = store.upsert({
+  const mapping = database.mappings.upsert({
     resourceId: Number(resourceId),
     resourceName: resourceName || '',
     deviceId: String(deviceId),
@@ -39,9 +37,8 @@ router.put('/', (req, res) => {
   res.json(mapping);
 });
 
-// DELETE /api/mappings/:resourceId
 router.delete('/:resourceId', (req, res) => {
-  store.remove(Number(req.params.resourceId));
+  database.mappings.remove(Number(req.params.resourceId));
   res.json({ success: true });
 });
 

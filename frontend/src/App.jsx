@@ -3,12 +3,20 @@ import Dashboard from './pages/Dashboard';
 import Resources from './pages/Resources';
 import Mappings from './pages/Mappings';
 import Bookings from './pages/Bookings';
+import Battery from './pages/Battery';
+import Alerts from './pages/Alerts';
+import Monitor from './pages/Monitor';
+import Settings from './pages/Settings';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'resources', label: 'Ressourcen' },
-  { id: 'bookings', label: 'Buchungen' },
   { id: 'mappings', label: 'Zuordnung' },
+  { id: 'battery', label: 'Batterie' },
+  { id: 'monitor', label: 'Monitor' },
+  { id: 'alerts', label: 'Warnungen' },
+  { id: 'bookings', label: 'Buchungen' },
+  { id: 'resources', label: 'Ressourcen' },
+  { id: 'settings', label: 'Einstellungen' },
 ];
 
 export default function App() {
@@ -32,7 +40,7 @@ export default function App() {
           </div>
 
           {/* Tabs */}
-          <nav className="-mb-px flex space-x-6">
+          <nav className="-mb-px flex space-x-6 overflow-x-auto">
             {TABS.map(tab => (
               <button
                 key={tab.id}
@@ -53,9 +61,13 @@ export default function App() {
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'resources' && <Resources />}
-        {activeTab === 'bookings' && <Bookings />}
         {activeTab === 'mappings' && <Mappings />}
+        {activeTab === 'battery' && <Battery />}
+        {activeTab === 'monitor' && <Monitor />}
+        {activeTab === 'alerts' && <Alerts />}
+        {activeTab === 'bookings' && <Bookings />}
+        {activeTab === 'resources' && <Resources />}
+        {activeTab === 'settings' && <Settings />}
       </main>
     </div>
   );

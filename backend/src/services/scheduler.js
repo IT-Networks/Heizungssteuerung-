@@ -2,41 +2,51 @@ const cron = require('node-cron');
 const config = require('../config');
 const churchtools = require('./churchtools');
 const danfoss = require('./danfoss');
-const store = require('./store');
+const database = require('./database');
 
 class HeatingScheduler {
   constructor() {
     this.task = null;
+    this.batteryTask = null;
+    this.monitorTask = null;
     this.lastRun = null;
     this.lastResults = [];
   }
 
   start() {
     const interval = config.scheduler.intervalMinutes;
-    // Run every N minutes
+
     this.task = cron.schedule(`*/${interval} * * * *`, () => {
-      this.run().catch(err => {
-        console.error('[Scheduler] Error:', err.message);
-      });
+      this.run().catch(err => console.error('[Scheduler] Error:', err.message));
     });
     console.log(`[Scheduler] Started, checking every ${interval} minutes`);
 
-    // Run immediately on start
-    this.run().catch(err => {
-      console.error('[Scheduler] Initial run error:', err.message);
+    this.batteryTask = cron.schedule('0 * * * *', () => {
+      this.checkBatteryLevels().catch(err => console.error('[Scheduler] Battery check error:', err.message));
     });
+    console.log('[Scheduler] Battery monitoring started (hourly)');
+
+    this.monitorTask = cron.schedule('*/10 * * * *', () => {
+      this.checkExtendedHeating().catch(err => console.error('[Scheduler] Heating monitor error:', err.message));
+    });
+    console.log('[Scheduler] Extended heating monitor started');
+
+    this.run().catch(err => console.error('[Scheduler] Initial run error:', err.message));
+
+    setTimeout(() => {
+      this.checkBatteryLevels().catch(err => console.error('[Scheduler] Initial battery check error:', err.message));
+    }, 5000);
   }
 
   stop() {
-    if (this.task) {
-      this.task.stop();
-      this.task = null;
-      console.log('[Scheduler] Stopped');
-    }
+    if (this.task) { this.task.stop(); this.task = null; }
+    if (this.batteryTask) { this.batteryTask.stop(); this.batteryTask = null; }
+    if (this.monitorTask) { this.monitorTask.stop(); this.monitorTask = null; }
+    console.log('[Scheduler] Stopped');
   }
 
   async run() {
-    const mappings = store.getAll().filter(m => m.enabled);
+    const mappings = database.mappings.getAll().filter(m => m.enabled);
     if (mappings.length === 0) {
       this.lastRun = new Date().toISOString();
       this.lastResults = [];
@@ -48,7 +58,6 @@ class HeatingScheduler {
     const now = new Date();
     const results = [];
 
-    // Fetch bookings for today and tomorrow (to handle preheat across midnight)
     const from = formatDate(now);
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -81,13 +90,12 @@ class HeatingScheduler {
       };
 
       try {
-        // Find active or upcoming bookings for this resource
         const resourceBookings = bookings.filter(b => {
           const bResourceId = b.base?.resource?.id || b.resource_id;
           return bResourceId === mapping.resourceId;
         });
 
-        const { shouldHeat, reason } = this.evaluateBookings(
+        const { shouldHeat, reason, bookingCaption } = this.evaluateBookings(
           resourceBookings,
           now,
           mapping.preheatMinutes || config.scheduler.defaultPreheatMinutes
@@ -103,10 +111,35 @@ class HeatingScheduler {
 
         await danfoss.setTemperature(mapping.deviceId, targetTemp);
         result.success = true;
+
+        if (shouldHeat) {
+          database.sessions.startSession(mapping.resourceId, mapping.deviceId, targetTemp, bookingCaption);
+        } else {
+          database.sessions.endSession(mapping.resourceId);
+        }
+
+        database.heatingLog.add({
+          resourceId: mapping.resourceId,
+          deviceId: mapping.deviceId,
+          action: result.action,
+          temperature: targetTemp,
+          reason,
+          success: true,
+        });
       } catch (error) {
         result.success = false;
         result.error = error.message;
         console.error(`[Scheduler] Failed for resource ${mapping.resourceName}:`, error.message);
+
+        database.heatingLog.add({
+          resourceId: mapping.resourceId,
+          deviceId: mapping.deviceId,
+          action: 'error',
+          temperature: null,
+          reason: result.reason,
+          success: false,
+          errorMessage: error.message,
+        });
       }
 
       results.push(result);
@@ -117,44 +150,116 @@ class HeatingScheduler {
     console.log(`[Scheduler] Completed. ${results.filter(r => r.success).length}/${results.length} successful`);
   }
 
-  /**
-   * Determine if heating should be active based on bookings.
-   */
   evaluateBookings(bookings, now, preheatMinutes) {
     for (const booking of bookings) {
       const startTime = new Date(booking.startDate || booking.calculated_startdate);
       const endTime = new Date(booking.endDate || booking.calculated_enddate);
       const preheatStart = new Date(startTime.getTime() - preheatMinutes * 60000);
+      const caption = booking.caption || booking.base?.caption || 'Buchung';
 
-      // Currently in a booking
       if (now >= startTime && now <= endTime) {
         return {
           shouldHeat: true,
-          reason: `Active booking: ${booking.caption || booking.base?.caption || 'Booking'} (until ${endTime.toLocaleTimeString('de-DE')})`,
+          reason: `Aktive Buchung: ${caption} (bis ${endTime.toLocaleTimeString('de-DE')})`,
+          bookingCaption: caption,
         };
       }
 
-      // Preheating for upcoming booking
       if (now >= preheatStart && now < startTime) {
         return {
           shouldHeat: true,
-          reason: `Preheating for: ${booking.caption || booking.base?.caption || 'Booking'} (starts ${startTime.toLocaleTimeString('de-DE')})`,
+          reason: `Vorheizen für: ${caption} (Start ${startTime.toLocaleTimeString('de-DE')})`,
+          bookingCaption: caption,
         };
       }
     }
 
     return {
       shouldHeat: false,
-      reason: 'No active or upcoming bookings',
+      reason: 'Keine aktiven oder anstehenden Buchungen',
+      bookingCaption: null,
     };
   }
 
+  async checkBatteryLevels() {
+    console.log('[Scheduler] Checking battery levels...');
+    const warningThreshold = parseInt(database.settings.get('battery_warning_threshold') || '20', 10);
+    const criticalThreshold = parseInt(database.settings.get('battery_critical_threshold') || '10', 10);
+
+    try {
+      const devices = await danfoss.getDevicesWithStatus();
+
+      for (const device of devices) {
+        const deviceId = device.id || device.device_id;
+        const batteryLevel = device.parsed.batteryLevel;
+        if (batteryLevel === null) continue;
+
+        database.battery.record(deviceId, batteryLevel);
+
+        if (batteryLevel <= criticalThreshold) {
+          const recentAlerts = database.alerts.getActive();
+          const hasRecent = recentAlerts.some(a => a.type === 'battery_critical' && a.device_id === deviceId);
+          if (!hasRecent) {
+            database.alerts.create({
+              type: 'battery_critical',
+              severity: 'critical',
+              deviceId,
+              message: `Batterie kritisch: ${device.name || deviceId} bei ${batteryLevel}%`,
+            });
+          }
+        } else if (batteryLevel <= warningThreshold) {
+          const recentAlerts = database.alerts.getActive();
+          const hasRecent = recentAlerts.some(a => a.type === 'battery_warning' && a.device_id === deviceId);
+          if (!hasRecent) {
+            database.alerts.create({
+              type: 'battery_warning',
+              severity: 'warning',
+              deviceId,
+              message: `Batterie niedrig: ${device.name || deviceId} bei ${batteryLevel}%`,
+            });
+          }
+        }
+      }
+
+      database.battery.cleanup(90);
+    } catch (error) {
+      console.error('[Scheduler] Battery check failed:', error.message);
+    }
+  }
+
+  async checkExtendedHeating() {
+    const maxMinutes = parseInt(database.settings.get('max_heating_duration_minutes') || '180', 10);
+    const overlong = database.sessions.getOverlong(maxMinutes);
+
+    for (const session of overlong) {
+      const recentAlerts = database.alerts.getActive();
+      const hasRecent = recentAlerts.some(a => a.type === 'extended_heating' && a.resource_id === session.resource_id);
+      if (!hasRecent) {
+        const mapping = database.mappings.getByResourceId(session.resource_id);
+        const name = mapping?.resourceName || `Ressource ${session.resource_id}`;
+        database.alerts.create({
+          type: 'extended_heating',
+          severity: 'warning',
+          resourceId: session.resource_id,
+          deviceId: session.device_id,
+          message: `Übermäßig langes Heizen: ${name} seit ${session.current_duration_minutes} Min. (Limit: ${maxMinutes} Min.)`,
+        });
+        console.warn(`[Monitor] Extended heating alert: ${name} - ${session.current_duration_minutes} min`);
+      }
+    }
+
+    database.heatingLog.cleanup(30);
+    database.alerts.cleanup(90);
+  }
+
   getStatus() {
+    const activeSessions = database.sessions.getActive();
     return {
       lastRun: this.lastRun,
       results: this.lastResults,
       intervalMinutes: config.scheduler.intervalMinutes,
       running: !!this.task,
+      activeSessions: activeSessions.length,
     };
   }
 }
