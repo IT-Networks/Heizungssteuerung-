@@ -2,6 +2,54 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useApi } from '../hooks/useApi';
 
+function WeatherPreview() {
+  const { data: weather, loading } = useApi(() => api.getWeather(), []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="w-4 h-4 border-2 border-gray-300 border-t-brand-600 rounded-full animate-spin" />
+        Lade Wetterdaten...
+      </div>
+    );
+  }
+
+  if (!weather?.current) {
+    return (
+      <div className="text-sm text-gray-500">
+        Keine Wetterdaten verfügbar. Bitte Standort konfigurieren.
+      </div>
+    );
+  }
+
+  const isAboveThreshold = weather.current.temperature >= weather.threshold;
+
+  return (
+    <div className={`p-4 rounded-lg border ${isAboveThreshold ? 'bg-green-50 border-green-200' : 'bg-sky-50 border-sky-200'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isAboveThreshold ? 'bg-green-100' : 'bg-sky-100'}`}>
+            <span className="text-xl font-bold ${isAboveThreshold ? 'text-green-700' : 'text-sky-700'}">
+              {weather.current.temperature}°
+            </span>
+          </div>
+          <div>
+            <p className={`font-medium ${isAboveThreshold ? 'text-green-800' : 'text-sky-800'}`}>
+              Aktuelle Außentemperatur
+            </p>
+            <p className={`text-sm ${isAboveThreshold ? 'text-green-600' : 'text-sky-600'}`}>
+              Schwelle: {weather.threshold}°C
+            </p>
+          </div>
+        </div>
+        <div className={`px-3 py-1 rounded-full text-sm font-medium ${isAboveThreshold ? 'bg-green-200 text-green-800' : 'bg-sky-200 text-sky-800'}`}>
+          {isAboveThreshold ? 'Heizung pausiert' : 'Heizung aktiv'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { data: settings, loading, reload } = useApi(() => api.getSettings());
   const [form, setForm] = useState({});
@@ -132,6 +180,13 @@ export default function Settings() {
           Wenn aktiviert, wird die Heizung nur eingeschaltet wenn die Außentemperatur unter dem Schwellwert liegt.
           Daten von Open-Meteo (kostenlos, keine API-Key erforderlich).
         </p>
+
+        {/* Live temperature preview */}
+        {form.weather_enabled === 'true' && form.weather_latitude && form.weather_longitude && (
+          <div className="mb-6">
+            <WeatherPreview />
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Aktiviert</label>

@@ -83,7 +83,8 @@ class DanfossService {
   }
 
   /**
-   * Set thermostat temperature and ensure device is in manual mode.
+   * Set thermostat temperature.
+   * Uses manual_mode_fast which temporarily overrides the schedule.
    * @param {string} deviceId
    * @param {number} temperature - Temperature in °C (e.g. 21.5)
    */
@@ -91,18 +92,8 @@ class DanfossService {
     // Danfoss API expects temperature in tenths of a degree
     const value = Math.round(temperature * 10);
 
-    // Build mode command to set device to 'at_home' (manual mode)
-    const now = new Date();
-    const timestamp = now.getFullYear().toString() +
-      String(now.getMonth() + 1).padStart(2, '0') +
-      String(now.getDate()).padStart(2, '0') +
-      String(now.getHours()).padStart(2, '0') +
-      String(now.getMinutes()).padStart(2, '0');
-    const modeValue = timestamp + '010000'; // at_home mode
-
-    // Send both commands: set mode to manual and set temperature
+    // manual_mode_fast sets temperature and activates manual mode for 240 min default
     return this.sendCommands(deviceId, [
-      { code: 'mode', value: modeValue },
       { code: 'manual_mode_fast', value },
     ]);
   }
