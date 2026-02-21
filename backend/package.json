@@ -1,0 +1,16 @@
+{
+  "name": "heizungssteuerung-backend",
+  "version": "1.0.0",
+  "description": "Heating control backend – ChurchTools resources & Danfoss Ally integration",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "node-cron": "^3.0.3"
+  }
+}
