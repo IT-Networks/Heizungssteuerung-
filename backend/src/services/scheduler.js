@@ -88,6 +88,21 @@ class HeatingScheduler {
         churchtools.getBookings({ resource_ids: resourceIds, from, to }),
         churchtools.getResources(),
       ]);
+      console.log(`[Scheduler] Fetched ${bookings.length} bookings for ${resourceIds.length} resources (${from} to ${to})`);
+      if (bookings.length > 0) {
+        // Log first booking structure for debugging
+        const sample = bookings[0];
+        const booking = sample.booking || sample;
+        const calculated = booking.calculated || {};
+        const base = booking.base || booking;
+        console.log('[Scheduler] Sample booking structure:', {
+          hasBookingWrapper: !!sample.booking,
+          hasCalculated: !!booking.calculated,
+          hasBase: !!booking.base,
+          startDate: calculated.startDate || base.startDate || booking.startDate,
+          resourceId: base.resource?.id || booking.resource_id,
+        });
+      }
     } catch (error) {
       console.error('[Scheduler] Failed to fetch data:', error.message);
       this.lastRun = now.toISOString();
@@ -157,7 +172,9 @@ class HeatingScheduler {
         }
 
         const resourceBookings = bookings.filter(b => {
-          const bResourceId = b.base?.resource?.id || b.resource_id;
+          // ChurchTools returns nested structure: item.booking or item directly
+          const booking = b.booking || b;
+          const bResourceId = booking.base?.resource?.id || booking.resource_id || b.resource_id;
           return bResourceId === mapping.resourceId;
         });
 
@@ -228,11 +245,21 @@ class HeatingScheduler {
   }
 
   evaluateBookings(bookings, now, preheatMinutes) {
-    for (const booking of bookings) {
-      const startTime = new Date(booking.startDate || booking.calculated_startdate);
-      const endTime = new Date(booking.endDate || booking.calculated_enddate);
+    for (const item of bookings) {
+      // ChurchTools returns nested structure: item.booking or item directly
+      const booking = item.booking || item;
+      const calculated = booking.calculated || {};
+      const base = booking.base || booking;
+
+      // Try multiple date field locations (calculated > base > direct)
+      const startTime = new Date(
+        calculated.startDate || base.startDate || booking.startDate || booking.calculated_startdate
+      );
+      const endTime = new Date(
+        calculated.endDate || base.endDate || booking.endDate || booking.calculated_enddate
+      );
       const preheatStart = new Date(startTime.getTime() - preheatMinutes * 60000);
-      const caption = booking.caption || booking.base?.caption || 'Buchung';
+      const caption = base.caption || base.title || booking.caption || 'Buchung';
 
       if (now >= startTime && now <= endTime) {
         return {
