@@ -1,17 +1,25 @@
-version: '3.8'
-
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: heizungssteuerung-backend:latest
     container_name: heizung-backend
     ports:
-      - "3001:3001"
-    env_file:
-      - .env
+      - "${BACKEND_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3001
+      - DATA_PATH=/app/data
+      - CHURCHTOOLS_URL=${CHURCHTOOLS_URL}
+      - CHURCHTOOLS_LOGIN_TOKEN=${CHURCHTOOLS_LOGIN_TOKEN}
+      - DANFOSS_API_KEY=${DANFOSS_API_KEY}
+      - DANFOSS_API_SECRET=${DANFOSS_API_SECRET}
+      - SCHEDULER_INTERVAL_MINUTES=${SCHEDULER_INTERVAL_MINUTES:-5}
+      - DEFAULT_PREHEAT_MINUTES=${DEFAULT_PREHEAT_MINUTES:-30}
+      - DEFAULT_IDLE_TEMPERATURE=${DEFAULT_IDLE_TEMPERATURE:-160}
     volumes:
-      - ./data:/app/data
+      - ${APPDATA_PATH:-./data}:/app/data
     restart: unless-stopped
     networks:
       - heizung-net
@@ -20,9 +28,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: heizungssteuerung-frontend:latest
     container_name: heizung-frontend
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3001}
     depends_on:
       - backend
     restart: unless-stopped
