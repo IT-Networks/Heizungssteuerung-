@@ -11,8 +11,8 @@ import Settings from './pages/Settings';
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'mappings', label: 'Zuordnung' },
+  { id: 'monitor', label: 'Protokoll' },
   { id: 'battery', label: 'Batterie' },
-  { id: 'monitor', label: 'Monitor' },
   { id: 'alerts', label: 'Warnungen' },
   { id: 'bookings', label: 'Buchungen' },
   { id: 'resources', label: 'Ressourcen' },

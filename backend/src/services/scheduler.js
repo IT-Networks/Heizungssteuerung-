@@ -195,9 +195,12 @@ class HeatingScheduler {
         await danfoss.setTemperature(mapping.deviceId, targetTemp);
         result.success = true;
 
+        // Log state changes
         if (shouldHeat) {
+          console.log(`[Scheduler] ${mapping.resourceName}: Heizung AN → ${targetTemp}°C (${reason})`);
           database.sessions.startSession(mapping.resourceId, mapping.deviceId, targetTemp, bookingCaption);
         } else {
+          console.log(`[Scheduler] ${mapping.resourceName}: Heizung AUS → ${targetTemp}°C (${reason})`);
           database.sessions.endSession(mapping.resourceId);
         }
 
@@ -259,7 +262,7 @@ class HeatingScheduler {
         calculated.endDate || base.endDate || booking.endDate || booking.calculated_enddate
       );
       const preheatStart = new Date(startTime.getTime() - preheatMinutes * 60000);
-      const caption = base.caption || base.title || booking.caption || 'Buchung';
+      const caption = base.title || base.caption || booking.caption || booking.title || 'Buchung';
 
       if (now >= startTime && now <= endTime) {
         return {
