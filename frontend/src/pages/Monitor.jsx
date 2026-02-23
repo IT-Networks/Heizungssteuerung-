@@ -105,10 +105,11 @@ export default function Monitor() {
 function LogRow({ log, resourceName }) {
   const isHeating = log.action === 'heating';
   const isIdle = log.action === 'idle';
+  const isDisabled = log.action === 'disabled';
   const isError = log.action === 'error' || !log.success;
 
   return (
-    <tr className={`border-b border-gray-50 hover:bg-gray-50 ${isHeating ? 'bg-orange-50/30' : ''}`}>
+    <tr className={`border-b border-gray-50 hover:bg-gray-50 ${isHeating ? 'bg-orange-50/30' : ''} ${isDisabled ? 'bg-red-50/30' : ''}`}>
       <td className="p-3 text-gray-500 whitespace-nowrap">
         {new Date(log.created_at).toLocaleString('de-DE', {
           day: '2-digit', month: '2-digit',
@@ -121,6 +122,7 @@ function LogRow({ log, resourceName }) {
       <td className="p-3">
         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
           isHeating ? 'bg-orange-100 text-orange-700' :
+          isDisabled ? 'bg-red-100 text-red-700' :
           isIdle ? 'bg-blue-100 text-blue-700' :
           'bg-red-100 text-red-700'
         }`}>
@@ -130,6 +132,13 @@ function LogRow({ log, resourceName }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
               </svg>
               Hochfahren
+            </>
+          ) : isDisabled ? (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+              Deaktiviert
             </>
           ) : isIdle ? (
             <>

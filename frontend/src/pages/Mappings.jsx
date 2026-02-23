@@ -3,6 +3,20 @@ import { api } from '../services/api';
 import { useApi } from '../hooks/useApi';
 import TemperatureSlider from '../components/TemperatureSlider';
 
+// Patterns to detect "heating off" in resource description (same as backend)
+const HEATING_OFF_PATTERNS = [
+  /heizung\s*aus/i,
+  /keine\s*heizung/i,
+  /nicht\s*heizen/i,
+  /heating\s*off/i,
+  /no\s*heating/i,
+];
+
+function isHeatingDisabled(description) {
+  if (!description) return false;
+  return HEATING_OFF_PATTERNS.some(pattern => pattern.test(description));
+}
+
 export default function Mappings() {
   const { data: mappings, loading: loadingMap, reload: reloadMap } = useApi(() => api.getMappings());
   const { data: resources, loading: loadingRes } = useApi(() => api.getResources());
@@ -131,14 +145,29 @@ export default function Mappings() {
         </div>
       ) : (
         <div className="space-y-4">
-          {groupedMappings.map(group => (
-            <div key={group.resourceId} className="card">
+          {groupedMappings.map(group => {
+            const resource = (resources || []).find(r => r.id === group.resourceId);
+            const heatingDisabled = isHeatingDisabled(resource?.description);
+
+            return (
+            <div key={group.resourceId} className={`card ${heatingDisabled ? 'border-red-200 bg-red-50/30' : ''}`}>
               {/* Resource header */}
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-lg">{group.resourceName}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-gray-900 text-lg">{group.resourceName}</h3>
+                    {heatingDisabled && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Keine Heizung
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">
                     {group.devices.length} Thermostat{group.devices.length !== 1 ? 'e' : ''}
+                    {heatingDisabled && ' • Heizung in Beschreibung deaktiviert'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -205,7 +234,8 @@ export default function Mappings() {
                 ))}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>

@@ -127,9 +127,11 @@ class HeatingScheduler {
         // Check resource description for "heating off" patterns
         const resource = resourceMap.get(mapping.resourceId);
         if (resource && this.isHeatingDisabledByDescription(resource.description)) {
-          result.action = 'idle';
+          result.action = 'disabled';
           result.temperature = mapping.idleTemperature || config.scheduler.defaultIdleTemperature / 10;
-          result.reason = 'Heizung deaktiviert in Ressourcen-Beschreibung';
+          result.reason = 'Heizung deaktiviert in Ressourcen-Beschreibung ("keine Heizung")';
+
+          console.log(`[Scheduler] ${mapping.resourceName}: Heizung DEAKTIVIERT → ${result.temperature}°C (Beschreibung enthält "keine Heizung")`);
 
           await danfoss.setTemperature(mapping.deviceId, result.temperature);
           result.success = true;
