@@ -1,0 +1,10 @@
+# Local Development Override
+# This file is automatically merged with docker-compose.yml
+# Use for local testing: docker-compose up -d --build
+
+services:
+  backend:
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

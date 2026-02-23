@@ -1,3 +1,11 @@
+# Heizungssteuerung - Docker Compose for Unraid
+#
+# Setup:
+# 1. Create appdata directory: mkdir -p /mnt/user/appdata/heizungssteuerung
+# 2. Copy .env.example to /mnt/user/appdata/heizungssteuerung/.env
+# 3. Edit .env with your credentials
+# 4. Run: docker-compose up -d --build
+
 services:
   backend:
     build:
@@ -6,20 +14,13 @@ services:
     image: heizungssteuerung-backend:latest
     container_name: heizung-backend
     ports:
-      - "${BACKEND_PORT:-3001}:3001"
+      - "3001:3001"
+    env_file:
+      - /mnt/user/appdata/heizungssteuerung/.env
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - PORT=3001
       - DATA_PATH=/app/data
-      - CHURCHTOOLS_URL=${CHURCHTOOLS_URL}
-      - CHURCHTOOLS_LOGIN_TOKEN=${CHURCHTOOLS_LOGIN_TOKEN}
-      - DANFOSS_API_KEY=${DANFOSS_API_KEY}
-      - DANFOSS_API_SECRET=${DANFOSS_API_SECRET}
-      - SCHEDULER_INTERVAL_MINUTES=${SCHEDULER_INTERVAL_MINUTES:-5}
-      - DEFAULT_PREHEAT_MINUTES=${DEFAULT_PREHEAT_MINUTES:-30}
-      - DEFAULT_IDLE_TEMPERATURE=${DEFAULT_IDLE_TEMPERATURE:-160}
     volumes:
-      - ${APPDATA_PATH:-./data}:/app/data
+      - /mnt/user/appdata/heizungssteuerung:/app/data
     restart: unless-stopped
     networks:
       - heizung-net
@@ -31,9 +32,7 @@ services:
     image: heizungssteuerung-frontend:latest
     container_name: heizung-frontend
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:3001}
+      - "3000:80"
     depends_on:
       - backend
     restart: unless-stopped
