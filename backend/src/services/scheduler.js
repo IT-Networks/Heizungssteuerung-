@@ -174,11 +174,28 @@ class HeatingScheduler {
         }
 
         const resourceBookings = bookings.filter(b => {
-          // ChurchTools returns nested structure: item.booking or item directly
           const booking = b.booking || b;
-          const bResourceId = booking.base?.resource?.id || booking.resource_id || b.resource_id;
-          return bResourceId === mapping.resourceId;
+          const calculated = booking.calculated || {};
+          const base = booking.base || booking;
+          const bResourceId = base.resource?.id
+            || booking.resource_id
+            || b.resource_id
+            || calculated.resource_id
+            || base.resourceId;
+          return Number(bResourceId) === Number(mapping.resourceId);
         });
+
+        console.log(`[Scheduler] ${mapping.resourceName} (ID ${mapping.resourceId}): ${resourceBookings.length} Buchungen gefunden von ${bookings.length} gesamt`);
+        if (resourceBookings.length === 0 && bookings.length > 0) {
+          // Debug: log what resource IDs the bookings actually have
+          const foundIds = bookings.map(b => {
+            const booking = b.booking || b;
+            const base = booking.base || booking;
+            return base.resource?.id || booking.resource_id || b.resource_id || 'unknown';
+          });
+          console.log(`[Scheduler] Booking resource IDs in API response: [${[...new Set(foundIds)].join(', ')}]`);
+          console.log(`[Scheduler] Mapping expects resource ID: ${mapping.resourceId} (type: ${typeof mapping.resourceId})`);
+        }
 
         const { shouldHeat, reason, bookingCaption } = this.evaluateBookings(
           resourceBookings,
