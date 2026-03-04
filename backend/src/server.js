@@ -38,7 +38,7 @@ app.get('/api/health', (req, res) => {
   const activeAlerts = database.alerts.getActive();
   res.json({
     status: 'ok',
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }),
     churchtools: !!config.churchtools.url,
     danfoss: !!config.danfoss.apiKey,
     activeAlerts: activeAlerts.length,
@@ -46,6 +46,13 @@ app.get('/api/health', (req, res) => {
 });
 
 async function start() {
+  // Verify timezone
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.log(`[Server] Timezone: ${tz} (expected: Europe/Berlin)`);
+  if (tz !== 'Europe/Berlin') {
+    console.warn('[Server] WARNING: Timezone is not Europe/Berlin! Set TZ=Europe/Berlin in environment.');
+  }
+
   // Initialize ChurchTools session
   if (config.churchtools.url && config.churchtools.loginToken) {
     try {

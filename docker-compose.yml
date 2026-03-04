@@ -19,6 +19,7 @@ services:
       - /mnt/user/appdata/heizungssteuerung/.env
     environment:
       - DATA_PATH=/app/data
+      - TZ=Europe/Berlin
     volumes:
       - /mnt/user/appdata/heizungssteuerung:/app/data
     restart: unless-stopped

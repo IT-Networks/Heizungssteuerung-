@@ -37,8 +37,8 @@ function initSchema() {
         idle_temperature REAL NOT NULL DEFAULT 16.0,
         preheat_minutes INTEGER NOT NULL DEFAULT 30,
         enabled INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
         UNIQUE(resource_id, device_id)
       );
 
@@ -64,15 +64,15 @@ function initSchema() {
       idle_temperature REAL NOT NULL DEFAULT 16.0,
       preheat_minutes INTEGER NOT NULL DEFAULT 30,
       enabled INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
       UNIQUE(resource_id, device_id)
     );
 
     CREATE TABLE IF NOT EXISTS battery_status (
       device_id TEXT NOT NULL,
       battery_level INTEGER,
-      recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      recorded_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
       PRIMARY KEY (device_id, recorded_at)
     );
 
@@ -85,7 +85,7 @@ function initSchema() {
       reason TEXT,
       success INTEGER NOT NULL DEFAULT 1,
       error_message TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS heating_sessions (
@@ -107,13 +107,13 @@ function initSchema() {
       device_id TEXT,
       message TEXT NOT NULL,
       acknowledged INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_heating_log_resource ON heating_log(resource_id, created_at);
@@ -173,7 +173,7 @@ const mappingsDb = {
     getDb().prepare(`
       INSERT INTO mappings (resource_id, resource_name, device_id, device_name,
         target_temperature, idle_temperature, preheat_minutes, enabled, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
       ON CONFLICT(resource_id, device_id) DO UPDATE SET
         resource_name = excluded.resource_name,
         device_name = excluded.device_name,
@@ -181,7 +181,7 @@ const mappingsDb = {
         idle_temperature = excluded.idle_temperature,
         preheat_minutes = excluded.preheat_minutes,
         enabled = excluded.enabled,
-        updated_at = datetime('now')
+        updated_at = datetime('now','localtime')
     `).run(
       mapping.resourceId,
       mapping.resourceName || '',
@@ -249,14 +249,14 @@ const batteryDb = {
   getHistory(deviceId, days = 30) {
     return getDb().prepare(`
       SELECT * FROM battery_status
-      WHERE device_id = ? AND recorded_at >= datetime('now', ?)
+      WHERE device_id = ? AND recorded_at >= datetime('now','localtime', ?)
       ORDER BY recorded_at ASC
     `).all(deviceId, `-${days} days`);
   },
 
   cleanup(olderThanDays = 90) {
     getDb().prepare(
-      "DELETE FROM battery_status WHERE recorded_at < datetime('now', ?)"
+      "DELETE FROM battery_status WHERE recorded_at < datetime('now','localtime', ?)"
     ).run(`-${olderThanDays} days`);
   },
 };
@@ -288,14 +288,14 @@ const heatingLogDb = {
   getByResource(resourceId, days = 7) {
     return getDb().prepare(`
       SELECT * FROM heating_log
-      WHERE resource_id = ? AND created_at >= datetime('now', ?)
+      WHERE resource_id = ? AND created_at >= datetime('now','localtime', ?)
       ORDER BY created_at DESC
     `).all(resourceId, `-${days} days`);
   },
 
   cleanup(olderThanDays = 30) {
     getDb().prepare(
-      "DELETE FROM heating_log WHERE created_at < datetime('now', ?)"
+      "DELETE FROM heating_log WHERE created_at < datetime('now','localtime', ?)"
     ).run(`-${olderThanDays} days`);
   },
 };
@@ -312,7 +312,7 @@ const sessionsDb = {
 
     const result = getDb().prepare(`
       INSERT INTO heating_sessions (resource_id, device_id, started_at, target_temperature, booking_caption)
-      VALUES (?, ?, datetime('now'), ?, ?)
+      VALUES (?, ?, datetime('now','localtime'), ?, ?)
     `).run(resourceId, deviceId, targetTemperature, bookingCaption || null);
     return result.lastInsertRowid;
   },
@@ -320,8 +320,8 @@ const sessionsDb = {
   endSession(resourceId) {
     getDb().prepare(`
       UPDATE heating_sessions
-      SET ended_at = datetime('now'),
-          duration_minutes = CAST((julianday('now') - julianday(started_at)) * 1440 AS INTEGER)
+      SET ended_at = datetime('now','localtime'),
+          duration_minutes = CAST((julianday('now','localtime') - julianday(started_at)) * 1440 AS INTEGER)
       WHERE resource_id = ? AND ended_at IS NULL
     `).run(resourceId);
   },
@@ -329,7 +329,7 @@ const sessionsDb = {
   getActive() {
     return getDb().prepare(`
       SELECT *,
-        CAST((julianday('now') - julianday(started_at)) * 1440 AS INTEGER) as current_duration_minutes
+        CAST((julianday('now','localtime') - julianday(started_at)) * 1440 AS INTEGER) as current_duration_minutes
       FROM heating_sessions
       WHERE ended_at IS NULL
       ORDER BY started_at ASC
@@ -339,10 +339,10 @@ const sessionsDb = {
   getOverlong(maxMinutes) {
     return getDb().prepare(`
       SELECT *,
-        CAST((julianday('now') - julianday(started_at)) * 1440 AS INTEGER) as current_duration_minutes
+        CAST((julianday('now','localtime') - julianday(started_at)) * 1440 AS INTEGER) as current_duration_minutes
       FROM heating_sessions
       WHERE ended_at IS NULL
-        AND CAST((julianday('now') - julianday(started_at)) * 1440 AS INTEGER) > ?
+        AND CAST((julianday('now','localtime') - julianday(started_at)) * 1440 AS INTEGER) > ?
       ORDER BY started_at ASC
     `).all(maxMinutes);
   },
@@ -350,7 +350,7 @@ const sessionsDb = {
   getHistory(resourceId, days = 30) {
     return getDb().prepare(`
       SELECT * FROM heating_sessions
-      WHERE resource_id = ? AND started_at >= datetime('now', ?)
+      WHERE resource_id = ? AND started_at >= datetime('now','localtime', ?)
       ORDER BY started_at DESC
     `).all(resourceId, `-${days} days`);
   },
@@ -394,7 +394,7 @@ const alertsDb = {
 
   cleanup(olderThanDays = 90) {
     getDb().prepare(
-      "DELETE FROM alerts WHERE acknowledged = 1 AND created_at < datetime('now', ?)"
+      "DELETE FROM alerts WHERE acknowledged = 1 AND created_at < datetime('now','localtime', ?)"
     ).run(`-${olderThanDays} days`);
   },
 };
@@ -419,16 +419,16 @@ const settingsDb = {
   set(key, value) {
     getDb().prepare(`
       INSERT INTO settings (key, value, updated_at)
-      VALUES (?, ?, datetime('now'))
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+      VALUES (?, ?, datetime('now','localtime'))
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now','localtime')
     `).run(key, String(value));
   },
 
   setMultiple(entries) {
     const stmt = getDb().prepare(`
       INSERT INTO settings (key, value, updated_at)
-      VALUES (?, ?, datetime('now'))
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+      VALUES (?, ?, datetime('now','localtime'))
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now','localtime')
     `);
     const transaction = getDb().transaction((items) => {
       for (const [key, value] of Object.entries(items)) {

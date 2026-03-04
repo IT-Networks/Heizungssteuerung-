@@ -269,7 +269,7 @@ class HeatingScheduler {
       if (now >= startTime && now <= endTime) {
         return {
           shouldHeat: true,
-          reason: `Aktive Buchung: ${caption} (bis ${endTime.toLocaleTimeString('de-DE')})`,
+          reason: `Aktive Buchung: ${caption} (bis ${endTime.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin' })})`,
           bookingCaption: caption,
         };
       }
@@ -277,7 +277,7 @@ class HeatingScheduler {
       if (now >= preheatStart && now < startTime) {
         return {
           shouldHeat: true,
-          reason: `Vorheizen für: ${caption} (Start ${startTime.toLocaleTimeString('de-DE')})`,
+          reason: `Vorheizen für: ${caption} (Start ${startTime.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin' })})`,
           bookingCaption: caption,
         };
       }
@@ -374,7 +374,11 @@ class HeatingScheduler {
 }
 
 function formatDate(date) {
-  return date.toISOString().split('T')[0];
+  // Use local German date to avoid UTC date boundary issues
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 module.exports = new HeatingScheduler();
